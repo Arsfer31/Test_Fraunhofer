@@ -1,0 +1,181 @@
+Dokumentation: Bereitstellung einer Webanwendung mit Kubernetes und Docker
+
+1. Konfiguration des Kubernetes-Clusters
+
+1.1 Installation und Start von Minikube
+
+Minikube wird verwendet, um einen lokalen Kubernetes-Cluster auszuführen.
+
+Befehle:
+
+minikube start
+
+Überprüfung des Minikube-Status:
+
+minikube status
+
+Falls Minikube nicht richtig startet, versuchen Sie:
+
+minikube delete
+minikube start
+
+1.2 Konfiguration von kubectl
+
+kubectl ist das CLI-Tool zur Interaktion mit Kubernetes.
+
+Aktuellen Kontext überprüfen:
+
+kubectl config current-context
+
+Minikube als Standardkontext setzen:
+
+kubectl config use-context minikube
+
+Cluster-Nodes überprüfen:
+
+kubectl get nodes
+
+2. Erstellung des Docker-Images
+
+2.1 Schreiben des Dockerfile
+
+FROM httpd:latest
+COPY ./ /usr/local/apache2/htdocs/
+CMD ["httpd", "-D", "FOREGROUND"]
+
+2.2 Erstellen des Docker-Images
+
+docker build -t imagetest .
+
+2.3 Lokales Testen des Docker-Images
+
+docker run --name test -p 9595:80 imagetest
+
+Zugriff im Browser überprüfen:
+
+http://localhost:9595
+
+Falls das Image korrekt funktioniert, mit dem Kubernetes-Deployment fortfahren.
+
+2.4 Image auf Docker Hub pushen
+
+docker tag imagetest arsfer31/imagetest:v1
+docker push arsfer31/imagetest:v1
+
+3. Bereitstellung der Anwendung in Kubernetes
+
+3.1 Deployment mit deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: website-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: Website
+  template:
+    metadata:
+      labels:
+        app: Website
+    spec:
+      containers:
+      - name: website
+        image: arsfer31/imagetest:v1
+        ports:
+        - containerPort: 80
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 5
+
+Deployment anwenden:
+
+kubectl apply -f deployment.yaml
+
+Überprüfung der laufenden Pods:
+
+kubectl get pods
+
+3.2 Veröffentlichung mit service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  type: NodePort
+  selector:
+    app: Website
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: 30010
+
+Service anwenden:
+
+kubectl apply -f service.yaml
+
+Überprüfung der Services:
+
+kubectl get services
+
+Zugriff auf die Anwendung über:
+
+http://localhost:30010
+
+Falls Minikube verwendet wird, die korrekte URL abrufen mit:
+
+minikube service my-service --url
+
+Falls die Anwendung dauerhaft im Internet sichtbar sein soll, verwenden Sie:
+
+kubectl port-forward service/my-service 30010:80
+
+4. Funktionsüberprüfung
+
+4.1 Apache-Logs im Pod überprüfen
+
+kubectl logs <pod-name>
+
+4.2 Endpunkte des Services überprüfen
+
+kubectl describe service my-service
+
+4.3 Anwendung von innerhalb des Pods testen
+
+kubectl exec -it <pod-name> -- sh
+curl -I http://localhost
+
+5. Häufige Probleme und Lösungen
+
+Problem                                                                                                                 Lösung
+
+localhost:30010 zeigt "Seite nicht erreichbar"                          Sicherstellen, dass targetPort und containerPort auf 80 gesetzt sind. kubectl describe service my-service ausführen, um Endpunkte zu prüfen.
+
+kubectl apply -f deployment.yaml schlägt fehl                           Überprüfen, ob Minikube läuft mit minikube status. Falls nicht, minikube start ausführen.
+
+kubectl get pods zeigt Pods mit CrashLoopBackOff                         Logs mit kubectl logs <pod-name> prüfen und sicherstellen, dass Apache gestartet ist.
+
+docker run bleibt nicht aktiv                                            In Dockerfile sicherstellen: CMD ["httpd", "-D", "FOREGROUND"] verwenden.
+
+ Fazit
+
+Wir haben:
+✔️ Ein Docker-Image erstellt und lokal getestet.
+✔️ Die Anwendung in Kubernetes mit Deployment und Service bereitgestellt.
+✔️ Die Konnektivität und mögliche Fehler überprüft.
+✔️ Ein port-forward konfiguriert, um die Anwendung dauerhaft im Internet sichtbar zu machen.
+
+ Die Anwendung ist jetzt erfolgreich bereitgestellt und einsatzbereit! 🎉
+
